@@ -3,6 +3,7 @@
 
 pub mod api;
 pub mod pprof;
+pub mod v2;
 
 use core::fmt;
 use std::borrow::{Borrow, Cow};
