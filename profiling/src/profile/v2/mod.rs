@@ -12,7 +12,7 @@ use indexmap::{IndexMap, IndexSet};
 use std::hash::Hash;
 use std::ops::{Add, AddAssign};
 use std::sync::Arc;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub struct Endpoints {
     mappings: IndexMap<i64, i64>,
@@ -21,7 +21,6 @@ pub struct Endpoints {
 }
 
 pub struct Profile {
-    storage: Arc<LockedProfileStorage>,
     string_table: Arc<LockedStringTable>,
     sample_types: Vec<ValueType>,
     samples: IndexMap<Sample, Vec<i64>>,
@@ -34,7 +33,6 @@ pub struct Profile {
 
 impl Profile {
     pub fn new(
-        storage: Arc<LockedProfileStorage>,
         string_table: Arc<LockedStringTable>,
         sample_types: Vec<ValueType>,
         samples: IndexMap<Sample, Vec<i64>>,
@@ -65,7 +63,6 @@ impl Profile {
             drop(lock); // release lock as quickly as possible
 
             Ok(Self {
-                storage,
                 string_table,
                 sample_types,
                 samples,
@@ -107,28 +104,14 @@ impl Profile {
         Ok(())
     }
 
-    pub fn add_mapping(&self, mapping: Mapping) -> u64 {
-        self.storage.lock().add_mapping(mapping)
-    }
-
-    pub fn add_location(&self, location: Location) -> u64 {
-        self.storage.lock().add_location(location)
-    }
-
-    pub fn add_function(&self, function: Function) -> u64 {
-        self.storage.lock().add_function(function)
-    }
-
     pub fn add_endpoint(&mut self, local_root_span_id: i64, endpoint: i64) {
         self.endpoints.mappings.insert(local_root_span_id, endpoint);
     }
 
-    pub fn into_pprof(mut self) -> pprof::Profile {
-        let lock = self.storage.lock();
-        let functions = lock.functions();
-        let locations = lock.locations();
-        let mappings = lock.mappings();
-        drop(lock);
+    pub fn into_pprof(mut self, profile_storage: &ProfileStorage) -> pprof::Profile {
+        let functions = profile_storage.functions();
+        let locations = profile_storage.locations();
+        let mappings = profile_storage.mappings();
 
         let lock = self.string_table.lock();
         let string_table = lock.strings();
@@ -190,25 +173,26 @@ impl Profile {
     /// start and end times.
     pub fn serialize(
         mut self,
-        mut end_time_nanos: i64,
+        profile_storage: &ProfileStorage,
+        end_time: SystemTime,
         duration: Option<Duration>,
     ) -> anyhow::Result<EncodedProfile> {
-        if end_time_nanos < self.time_nanos {
-            // todo: how to warn about this?
-            end_time_nanos = self.time_nanos;
-        }
+        let start = UNIX_EPOCH.add(Duration::from_nanos(self.time_nanos.try_into().unwrap()));
+        let end = if end_time < start { start } else { end_time };
 
         if let Some(duration) = duration {
             self.duration_nanos = duration.as_nanos().try_into().unwrap_or(i64::MAX);
         } else if self.duration_nanos == 0 {
-            let duration = end_time_nanos - self.time_nanos;
-            self.duration_nanos = duration;
+            // end time is at least start time; checked above
+            self.duration_nanos = end_time
+                .duration_since(start)
+                .unwrap()
+                .as_nanos()
+                .try_into()
+                .unwrap_or(i64::MAX);
         }
 
-        let start = UNIX_EPOCH.add(Duration::from_nanos(self.time_nanos.try_into().unwrap()));
-        let end = UNIX_EPOCH.add(Duration::from_nanos(end_time_nanos.try_into().unwrap()));
-
-        let pprof = self.into_pprof();
+        let pprof = self.into_pprof(profile_storage);
 
         let mut buffer = Vec::new();
         use prost::Message;
