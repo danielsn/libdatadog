@@ -61,7 +61,7 @@ impl Profile {
 
             let mut lock = string_table.lock();
             let local_root_span_id_label = lock.intern("local root span id");
-            let endpoint_label = lock.intern("trace resource");
+            let endpoint_label = lock.intern("trace endpoint");
             drop(lock); // release lock as quickly as possible
 
             Ok(Self {
@@ -134,17 +134,37 @@ impl Profile {
         let string_table = lock.strings();
         drop(lock);
 
-        let samples = self
-            .samples
-            .drain(..)
-            .map(|(sample, values)| {
+        // Add endpoint profiling information while converting the samples.
+        let endpoints = self.endpoints;
+        let samples = if !endpoints.mappings.is_empty() {
+            let f = |(mut sample, values): (Sample, Vec<i64>)| {
+                for label in sample.labels.iter() {
+                    if label.key == endpoints.local_root_span_id_label {
+                        if let Some(endpoint) = endpoints.mappings.get(&label.str) {
+                            let label = Label::str(endpoints.endpoint_label, *endpoint);
+                            sample.labels.push(label);
+                        }
+                        break;
+                    }
+                }
+
                 pprof::Sample {
                     location_ids: sample.location_ids,
                     values,
-                    labels: sample.labels, // todo: add endpoint info
+                    labels: sample.labels,
                 }
-            })
-            .collect();
+            };
+
+            self.samples.drain(..).map(f).collect()
+        } else {
+            let f = |(sample, values): (Sample, Vec<i64>)| pprof::Sample {
+                location_ids: sample.location_ids,
+                values,
+                labels: sample.labels,
+            };
+
+            self.samples.drain(..).map(f).collect()
+        };
 
         pprof::Profile {
             sample_types: self.sample_types,
@@ -188,18 +208,13 @@ impl Profile {
         let start = UNIX_EPOCH.add(Duration::from_nanos(self.time_nanos.try_into().unwrap()));
         let end = UNIX_EPOCH.add(Duration::from_nanos(end_time_nanos.try_into().unwrap()));
 
-        use prost::Message;
         let pprof = self.into_pprof();
+
         let mut buffer = Vec::new();
+        use prost::Message;
         pprof.encode(&mut buffer)?;
 
         Ok(EncodedProfile { start, end, buffer })
-    }
-}
-
-impl From<Profile> for pprof::Profile {
-    fn from(value: Profile) -> Self {
-        value.into_pprof()
     }
 }
 

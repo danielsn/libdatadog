@@ -64,13 +64,13 @@ pub struct ValueType {
 #[derive(Eq, PartialEq, Hash, ::prost::Message)]
 pub struct Label {
     #[prost(int64, tag = "1")]
-    key: i64, // Index into string table
+    pub(crate) key: i64, // Index into string table
     #[prost(int64, tag = "2")]
-    str: i64, // Index into string table
+    pub(crate) str: i64, // Index into string table
     #[prost(int64, tag = "3")]
-    num: i64,
+    pub num: i64,
     #[prost(int64, tag = "4")]
-    num_unit: i64,
+    pub num_unit: i64,
 }
 
 impl Label {
