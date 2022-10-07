@@ -30,6 +30,10 @@ pub struct Profile {
     pub comment: Vec<i64>,
     #[prost(int64, tag = "14")]
     pub default_sample_type: i64,
+    #[prost(int64, tag = "15")]
+    pub tick_unit: i64, // Index into the string table.
+    #[prost(message, repeated, tag = "16")]
+    pub label_sets: Vec<LabelSet>,
 }
 
 #[derive(Eq, Hash, PartialEq, ::prost::Message)]
@@ -50,6 +54,34 @@ pub struct Sample {
     /// things like a thread id, allocation size, etc
     #[prost(message, repeated, tag = "3")]
     pub labels: Vec<Label>,
+    /// Breakdown can hold the individual timestamps and values for a sample
+    /// that has aggregated values. The type and unit of each breakdown is
+    /// defined by the corresponding entry in Profile.sample_type. It's
+    /// acceptable to have less, but not more, breakdown entries than
+    /// Profile.sample_type entries.
+    #[prost(message, repeated, tag = "4")]
+    pub breakdowns: Vec<Breakdown>,
+}
+
+#[derive(Eq, Hash, PartialEq, ::prost::Message)]
+pub struct Breakdown {
+    #[prost(int64, repeated, tag = "1")]
+    pub ticks: Vec<i64>,
+    #[prost(int64, repeated, tag = "2")]
+    pub values: Vec<i64>,
+    #[prost(uint64, repeated, tag = "3")]
+    pub label_set_ids: Vec<u64>,
+}
+
+#[derive(Derivative)]
+#[derivative(Eq, PartialEq, Hash)]
+#[derive(Clone, ::prost::Message)]
+pub struct LabelSet {
+    #[derivative(PartialEq = "ignore", Hash = "ignore")]
+    #[prost(uint64, tag = "1")]
+    pub id: u64,
+    #[prost(message, repeated, tag = "2")]
+    pub labels: Vec<Label>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, ::prost::Message)]
@@ -61,7 +93,7 @@ pub struct ValueType {
 }
 
 /// Currently, libdatadog only allows string values in labels.
-#[derive(Eq, PartialEq, Hash, ::prost::Message)]
+#[derive(Clone, Eq, PartialEq, Hash, ::prost::Message)]
 pub struct Label {
     #[prost(int64, tag = "1")]
     pub(crate) key: i64, // Index into string table
