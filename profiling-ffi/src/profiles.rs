@@ -146,6 +146,8 @@ pub struct Sample<'a> {
     /// label includes additional context for this sample. It can include
     /// things like a thread id, allocation size, etc
     pub labels: Slice<'a, Label<'a>>,
+    pub breakdown_labels: Slice<'a, Label<'a>>,
+    // ^ Send this as a Sample.labels and Sample.breakdown.labels
 }
 
 impl<'a> TryFrom<&'a Mapping<'a>> for profiles::api::Mapping<'a> {
@@ -330,6 +332,7 @@ pub unsafe extern "C" fn ddog_Profile_free(_profile: Box<datadog_profiling::prof
 pub extern "C" fn ddog_Profile_add(
     profile: &mut datadog_profiling::profile::Profile,
     sample: Sample,
+    tick: *const i64,
 ) -> u64 {
     match sample.try_into().map(|s| profile.add(s)) {
         Ok(r) => match r {

@@ -1,3 +1,4 @@
+use crate::profile::EncodeError;
 use derivative::Derivative;
 
 #[derive(Eq, Hash, PartialEq, ::prost::Message)]
@@ -30,6 +31,13 @@ pub struct Profile {
     pub comment: Vec<i64>,
     #[prost(int64, tag = "14")]
     pub default_sample_type: i64,
+}
+
+impl Profile {
+    pub fn write_to_vec(&self, buffer: &mut Vec<u8>) -> Result<(), EncodeError> {
+        use prost::Message;
+        self.encode(buffer)
+    }
 }
 
 #[derive(Eq, Hash, PartialEq, ::prost::Message)]

@@ -1,9 +1,12 @@
 pub mod pprof;
+mod profile_set;
 mod profile_storage;
 mod string_table;
 
 pub use pprof::{Function, Label, Line, Location, Mapping, ValueType};
+pub use profile_set::*;
 pub use profile_storage::*;
+use std::collections::HashMap;
 pub use string_table::*;
 
 use crate::profile::EncodedProfile;
@@ -14,10 +17,67 @@ use std::ops::{Add, AddAssign};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+impl PProfIdentifiable for Function {
+    fn set_id(&mut self, id: u64) {
+        self.id = id;
+    }
+}
+
+impl PProfIdentifiable for Location {
+    fn set_id(&mut self, id: u64) {
+        self.id = id;
+    }
+}
+
+impl PProfIdentifiable for Mapping {
+    fn set_id(&mut self, id: u64) {
+        self.id = id;
+    }
+}
+
 pub struct Endpoints {
-    mappings: IndexMap<i64, i64>,
+    mappings: HashMap<i64, i64>,
     local_root_span_id_label: i64,
     endpoint_label: i64,
+}
+
+impl Endpoints {
+    pub fn new(local_root_span_id_label: i64, endpoint_label: i64) -> Self {
+        Self {
+            mappings: Default::default(),
+            local_root_span_id_label,
+            endpoint_label,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.mappings.is_empty()
+    }
+
+    /// # Arguments
+    /// * `span_id` - Index into the string table.
+    /// * `endpoint` - Index into the string table.
+    pub fn add(&mut self, span_id: i64, endpoint: i64) {
+        self.mappings.insert(span_id, endpoint);
+    }
+
+    pub fn find_trace_resource(&self, labels: &Vec<Label>) -> Option<Label> {
+        for label in labels.iter() {
+            if label.str == self.local_root_span_id_label {
+                if let Some(endpoint) = self.mappings.get(&label.str) {
+                    return Some(Label::str(self.endpoint_label, *endpoint));
+                }
+                break;
+            }
+        }
+        None
+    }
+
+    pub fn add_trace_resource_label(&self, sample: &mut pprof::Sample) {
+        if let Some(label) = self.find_trace_resource(&sample.labels) {
+            sample.labels.push(label);
+        }
+    }
 }
 
 pub struct Profile {
@@ -70,11 +130,7 @@ impl Profile {
                 duration_nanos,
                 period_type,
                 period,
-                endpoints: Endpoints {
-                    mappings: IndexMap::new(),
-                    local_root_span_id_label,
-                    endpoint_label,
-                },
+                endpoints: Endpoints::new(local_root_span_id_label, endpoint_label),
             })
         }
     }
