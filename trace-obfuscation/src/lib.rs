@@ -6,3 +6,5 @@
 #![deny(clippy::all)]
 
 pub mod replacer;
+
+pub mod obfuscator;
