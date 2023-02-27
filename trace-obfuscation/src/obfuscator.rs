@@ -3,15 +3,15 @@
 // developed at Datadog (https://www.datadoghq.com/). Copyright 2023-Present
 // Datadog, Inc.
 
-use crate::pb;
+use datadog_trace_protobuf::pb;
 use url::Url;
 
-const tagHTTPURL: &str = "http.url";
+const TAG_HTTP_URL: &str = "http.url";
 
 pub fn obfuscate_span(s: &mut pb::Span) {
     match &s.r#type[..] {
         "web" | "http" => {
-            if let Some(url) = s.meta.get_mut(tagHTTPURL) {
+            if let Some(url) = s.meta.get_mut(TAG_HTTP_URL) {
                 *url = obfuscate_url_string(url, true, true);
             }
         }
@@ -33,7 +33,7 @@ fn obfuscate_url_string(url: &str, remove_query_string: bool, remove_path_digits
     };
 
     if remove_query_string {
-        parsed_url.query_pairs_mut().clear();
+        parsed_url.set_query(None)
     }
 
     if remove_path_digits {
@@ -49,7 +49,7 @@ fn obfuscate_url_string(url: &str, remove_query_string: bool, remove_path_digits
                 processed_path_segs.push(seg);
             }
         }
-        
+
         match parsed_url.clone().path_segments_mut() {
             Ok(mut res) => {
                 res.clear();
@@ -58,5 +58,35 @@ fn obfuscate_url_string(url: &str, remove_query_string: bool, remove_path_digits
             Err(_) => return "?".to_string(),
         }
     }
-    str::replace(&url.to_string(), "/REDACTED/", "?")
+    parsed_url.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::obfuscator;
+    use duplicate::duplicate_item;
+
+    #[duplicate_item(
+        [
+        test_name   [test_query_string_1]
+        input       ["http://foo.com/"]
+        expected    ["http://foo.com/"];
+        ]
+        [
+        test_name   [test_query_string_2]
+        input       ["http://foo.com/123"]
+        expected    ["http://foo.com/123"];
+        ]
+        [
+        test_name   [test_query_string_3]
+        input       ["http://foo.com/id/123/page/1?search=bar&page=2"]
+        expected    ["http://foo.com/id/123/page/1?"];
+        ]
+    )]
+    #[test]
+    fn test_name() {
+        let result = obfuscator::obfuscate_url_string(input, true, false);
+        assert_eq!(result, expected);
+    }
 }
