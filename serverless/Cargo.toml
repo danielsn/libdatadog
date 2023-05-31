@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 log = "0.4"
 env_logger = "0.10.0"
+simple-logging = "2.0.2"
 datadog-trace-mini-agent = { path = "../trace-mini-agent" }
 datadog-trace-protobuf = { path = "../trace-protobuf" }
 datadog-trace-utils = { path = "../trace-utils" }

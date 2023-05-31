@@ -55,6 +55,7 @@ impl TraceProcessor for ServerlessTraceProcessor {
         tx: Sender<pb::TracerPayload>,
         mini_agent_metadata: Arc<trace_utils::MiniAgentMetadata>,
     ) -> http::Result<Response<Body>> {
+        error!("processing traces!");
         let (parts, body) = req.into_parts();
 
         if let Some(response) = http_utils::verify_request_content_length(

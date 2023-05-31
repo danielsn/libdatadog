@@ -9,10 +9,12 @@ use datadog_trace_mini_agent::{
     config, env_verifier, mini_agent, stats_flusher, stats_processor, trace_flusher,
     trace_processor,
 };
+use log::LevelFilter;
 
 pub fn main() {
-    let env = Env::new().filter_or("DD_LOG_LEVEL", "info");
-    Builder::from_env(env).target(Target::Stdout).init();
+    // let env = Env::new().filter_or("DD_LOG_LEVEL", "info");
+    // Builder::from_env(env).target(Target::Stdout).init();
+    simple_logging::log_to_file("/home/site/wwwroot/mini-agent.log", LevelFilter::Debug);
 
     info!("Starting serverless trace mini agent");
 
