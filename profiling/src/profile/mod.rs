@@ -998,8 +998,7 @@ mod api_test {
         let values: Vec<i64> = vec![1];
         let labels = vec![api::Label {
             key: "pid",
-            num: 101,
-            ..Default::default()
+            value : api::LabelValue::Num{data: 101, units: ""}
         }];
 
         let main_sample = api::Sample {
