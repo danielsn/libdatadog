@@ -533,24 +533,23 @@ impl Profile {
         let mut local_root_span_id_label_offset: Option<usize> = None;
         for label in sample.labels.iter() {
             let key = self.intern(label.key);
-            let str = label.str.map(|s| self.intern(s)).unwrap_or(0);
-            let num_unit = label.num_unit.map(|s| self.intern(s)).unwrap_or(0);
+            let (str, num, num_unit) = match label.value {
+                api::LabelValue::String(s) => (self.intern(s), 0, 0),
+                api::LabelValue::Num { data, units } => (0, data, self.intern(units)),
+            };
 
             if key == self.endpoints.local_root_span_id_label {
                 // Panic: if the label.str isn't 0, then str must have been provided.
                 anyhow::ensure!(
                     str == 0,
                     "the label \"local root span id\" must be sent as a number, not string {}",
-                    label.str.unwrap()
+                    self.get_string(str).unwrap()
                 );
-                anyhow::ensure!(
-                    label.num != 0,
-                    "the label \"local root span id\" must not be 0"
-                );
+                anyhow::ensure!(num != 0, "the label \"local root span id\" must not be 0");
                 anyhow::ensure!(
                     local_root_span_id_label_offset.is_none(),
                     "only one label per sample can have the key \"local root span id\", found two: {}, {}",
-                    labels[local_root_span_id_label_offset.unwrap()].num, label.num
+                    labels[local_root_span_id_label_offset.unwrap()].num, num
                 );
                 local_root_span_id_label_offset = Some(labels.len());
             }
@@ -559,7 +558,7 @@ impl Profile {
             labels.push(Label {
                 key,
                 str,
-                num: label.num,
+                num,
                 num_unit,
             });
         }

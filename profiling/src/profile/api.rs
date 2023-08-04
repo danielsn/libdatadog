@@ -92,22 +92,31 @@ pub struct Location<'a> {
     pub is_folded: bool,
 }
 
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-pub struct Label<'a> {
-    pub key: &'a str,
-
-    /// At most one of the following must be present
-    pub str: Option<&'a str>,
-    pub num: i64,
-
-    /// Should only be present when num is present.
-    /// Specifies the units of num.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum LabelValue<'a> {
+    String(&'a str),
+    /// `units` specifies the units of `data`.
     /// Use arbitrary string (for example, "requests") as a custom count unit.
     /// If no unit is specified, consumer may apply heuristic to deduce the unit.
     /// Consumers may also  interpret units like "bytes" and "kilobytes" as memory
     /// units and units like "seconds" and "nanoseconds" as time units,
     /// and apply appropriate unit conversions to these.
-    pub num_unit: Option<&'a str>,
+    Num {
+        data: i64,
+        units: &'a str,
+    },
+}
+
+impl<'a> Default for LabelValue<'a> {
+    fn default() -> Self {
+        LabelValue::String("")
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct Label<'a> {
+    pub key: &'a str,
+    pub value: LabelValue<'a>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -313,20 +322,20 @@ impl<'a> TryFrom<&'a pprof::Profile> for Profile<'a> {
 
             let mut labels = Vec::with_capacity(sample.labels.len());
             for label in sample.labels.iter() {
-                labels.push(Label {
-                    key: string_table_fetch(pprof, label.key)?,
-                    str: if label.str == 0 {
-                        None
-                    } else {
-                        Some(string_table_fetch(pprof, label.str)?)
-                    },
-                    num: label.num,
-                    num_unit: if label.num_unit == 0 {
-                        None
-                    } else {
-                        Some(string_table_fetch(pprof, label.num_unit)?)
-                    },
-                })
+                let key = string_table_fetch(pprof, label.key)?;
+                let value = if label.str != 0 {
+                    LabelValue::String(string_table_fetch(pprof, label.str)?)
+                } else {
+                    LabelValue::Num {
+                        data: label.num,
+                        units: if label.num_unit == 0 {
+                            ""
+                        } else {
+                            string_table_fetch(pprof, label.num_unit)?
+                        },
+                    }
+                };
+                labels.push(Label { key, value })
             }
             let sample = Sample {
                 locations,

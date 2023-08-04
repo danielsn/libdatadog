@@ -3,6 +3,7 @@
 
 use crate::Timespec;
 use datadog_profiling::profile as profiles;
+use datadog_profiling::profile::api::LabelValue;
 use datadog_profiling::profile::{profiled_endpoints, Profile};
 use ddcommon_ffi::slice::{AsBytes, CharSlice, Slice};
 use ddcommon_ffi::Error;
@@ -262,20 +263,17 @@ impl<'a> TryFrom<&'a Label<'a>> for profiles::api::Label<'a> {
         unsafe {
             let key = label.key.try_to_utf8()?;
             let str = label.str.try_to_utf8()?;
-            let str = if str.is_empty() { None } else { Some(str) };
-            let num_unit = label.num_unit.try_to_utf8()?;
-            let num_unit = if num_unit.is_empty() {
-                None
+            let value = if str.is_empty() {
+                LabelValue::Num {
+                    data: label.num,
+                    units: label.num_unit.try_to_utf8()?,
+                }
             } else {
-                Some(num_unit)
+                // TODO should we assert that we don't have num or num_units?
+                LabelValue::String(str)
             };
 
-            Ok(Self {
-                key,
-                str,
-                num: label.num,
-                num_unit,
-            })
+            Ok(Self { key, value })
         }
     }
 }
